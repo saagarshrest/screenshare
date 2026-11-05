@@ -124,7 +124,7 @@ jobs:
           sleep 3
           echo "--- stdout:"; cat ver.txt || true
           echo "--- log:"; cat "$LOG" 2>/dev/null || echo "(no log)"
-          grep -h "GNU General Public License" ver.txt "$LOG" >/dev/null 2>&1 \
+          { cat ver.txt; cat "$LOG" 2>/dev/null || true; } | grep "GNU General Public License" >/dev/null \
             || { echo "::error::--version did not print the license notice"; exit 1; }
           ./ShareScreen-Portable.exe --source test --width 640 --height 360 --no-tray &
           sleep 8
