@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 VERSION="${VERSION:-1.0.0}"
 ROOT="$(mktemp -d)/sharescreen"
-install -Dm755 sharescreen.py           "$ROOT/usr/lib/sharescreen/sharescreen.py"
+install -Dm755 ../host/sharescreen.py          "$ROOT/usr/lib/sharescreen/sharescreen.py"
 install -Dm644 sharescreen.desktop      "$ROOT/usr/share/applications/sharescreen.desktop"
 install -Dm644 ../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png \
                                         "$ROOT/usr/share/icons/hicolor/192x192/apps/sharescreen.png" 2>/dev/null || true

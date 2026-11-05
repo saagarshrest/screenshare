@@ -26,6 +26,7 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 | `ShareScreen.dmg` | Mac (macOS 13 Ventura or newer, Apple Silicon or Intel) |
 | `ShareScreen.apk` | Android 7.0 or newer |
 | `ShareScreen.deb` | Ubuntu / Debian (X11 session) |
+| `ShareScreen.exe` | Windows 10 (1903+) / 11, 64-bit |
 
 ---
 
@@ -54,6 +55,14 @@ sharescreen --portrait   # or --mirror, --width 2400 --height 1080, --encoder va
 ```
 
 It needs an **X11 session**. On Ubuntu, log out, click the gear icon and pick **Ubuntu on Xorg**. Wayland isn't supported yet. Press Ctrl+C to stop; the extra monitor is removed when it exits. For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
+
+### 1c. Windows (instead of a Mac)
+
+1. Run `ShareScreen.exe`. If SmartScreen warns, click **More info → Run anyway**. Allow it on **private networks** when Windows Firewall asks.
+2. With one monitor, the phone **mirrors** your screen. To use the phone as an **extra** screen, first install the free [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), set its resolution to your phone's (e.g. 2400×1080), and restart ShareScreen. It streams the extra monitor automatically.
+3. Options (run from a terminal): `ShareScreen.exe --list-monitors`, `--monitor 1`, `--encoder nvenc` (NVIDIA), `qsv` (Intel), `amf` (AMD), `--bitrate 20`.
+
+The exe bundles [FFmpeg](https://ffmpeg.org) (GPL build from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)). For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
 
 ### 2. Android
 
@@ -202,7 +211,7 @@ HTTP :8780 / WebSocket :8781 (JPEG) ──────────────�
 
 ## Roadmap
 
-- [ ] Windows host (`.exe`)
+- [x] Windows host (`.exe`)
 - [x] Linux host (`.deb` for Ubuntu, X11)
 - [ ] Touch input from the phone
 

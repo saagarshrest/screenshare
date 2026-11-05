@@ -53,12 +53,47 @@ jobs:
           case "$VERSION" in v[0-9]*) ;; *) VERSION=0.0.0 ;; esac
           VERSION="$VERSION" bash linux/build-deb.sh
           dpkg-deb --info linux/ShareScreen.deb
-          python3 -m py_compile linux/sharescreen.py
+          python3 -m py_compile host/sharescreen.py
       - uses: actions/upload-artifact@v4
         with: { name: linux, path: linux/ShareScreen.deb }
 
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Fetch ffmpeg (GPL build with ddagrab, x264, NVENC, QSV, AMF)
+        run: |
+          curl -sSL -o ffmpeg.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip
+          unzip -q -j ffmpeg.zip '*/bin/ffmpeg.exe' -d windows
+          ./windows/ffmpeg.exe -hide_banner -filters | grep -q ddagrab
+      - name: Build ShareScreen.exe
+        run: |
+          pip install pyinstaller==6.11.1
+          pyinstaller --onefile --console --name ShareScreen \
+            --add-binary "windows/ffmpeg.exe;." host/sharescreen.py
+          cp dist/ShareScreen.exe ShareScreen.exe
+      - name: Smoke test (test source, real protocol)
+        run: |
+          ./ShareScreen.exe --source test --width 640 --height 360 &
+          sleep 5
+          python - <<'PY'
+          import socket, struct, urllib.request
+          assert urllib.request.urlopen("http://127.0.0.1:8780/ping").read() == b"macscreen h264:8783"
+          f = socket.create_connection(("127.0.0.1", 8783), timeout=15).makefile("rb")
+          seen = set()
+          while not {1, 2} <= seen:
+              k, n = struct.unpack(">BI", f.read(5)); f.read(n); seen.add(k)
+          print("ok, got config + keyframe")
+          PY
+          taskkill //F //IM ShareScreen.exe || true
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: ShareScreen.exe }
+
   release:
-    needs: [mac, android, linux]
+    needs: [mac, android, linux, windows]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:

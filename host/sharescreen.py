@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ShareScreen for Linux: use an Android phone as an extra display (X11).
+"""ShareScreen host for Linux (X11) and Windows: use an Android phone as an extra display.
 
 Speaks the same protocol as the Mac app, so the existing Android app works as is:
   - UDP 8782  discovery: broadcasts "MACSCREEN 8780 <name>", answers "MACSCREEN?"
@@ -31,7 +31,46 @@ HTTP_PORT = 8780
 DISCOVERY_PORT = 8782
 VIDEO_PORT = 8783
 MONITOR_NAME = "ShareScreen"
+IS_WINDOWS = sys.platform == "win32"
 MAX_BACKLOG = 600_000  # bytes queued per viewer before we skip to the next keyframe
+
+
+def ffmpeg_path():
+    bundled = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))),
+                           "ffmpeg.exe" if IS_WINDOWS else "ffmpeg")
+    return bundled if os.path.exists(bundled) else "ffmpeg"
+
+
+# ---------------------------------------------------------------- Windows monitors
+
+def windows_monitors():
+    """[(index, x, y, width, height, is_primary)] in Desktop Duplication order."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # real pixels, not scaled
+    except (AttributeError, OSError):
+        user32.SetProcessDPIAware()
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                    ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+    found = []
+    proc = ctypes.WINFUNCTYPE(ctypes.c_int, wintypes.HMONITOR, wintypes.HDC,
+                              ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+
+    def callback(handle, _dc, _rect, _data):
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        user32.GetMonitorInfoW(handle, ctypes.byref(info))
+        r = info.rcMonitor
+        found.append((len(found), r.left, r.top, r.right - r.left, r.bottom - r.top, bool(info.dwFlags & 1)))
+        return 1
+
+    user32.EnumDisplayMonitors(None, None, proc(callback), 0)
+    return found
 
 
 def log(*args):
@@ -295,12 +334,22 @@ class Encoder:
         gop = max(1, a.fps // 2)
         if a.source == "test":
             src = ["-re", "-f", "lavfi", "-i", f"testsrc2=size={a.width}x{a.height}:rate={a.fps}"]
+        elif IS_WINDOWS:
+            src = ["-f", "lavfi", "-i",
+                   f"ddagrab=output_idx={a.monitor}:framerate={a.fps}:draw_mouse=1,hwdownload,format=bgra,"
+                   f"crop={a.width}:{a.height}:0:0"]
         else:
             display = os.environ.get("DISPLAY", ":0")
             x, y = self.origin
             src = ["-f", "x11grab", "-draw_mouse", "1", "-framerate", str(a.fps),
                    "-video_size", f"{a.width}x{a.height}", "-i", f"{display}+{x},{y}"]
-        if a.encoder == "vaapi":
+        if a.encoder in ("nvenc", "qsv", "amf"):
+            enc = ["-pix_fmt", "yuv420p" if a.encoder != "qsv" else "nv12", "-c:v", f"h264_{a.encoder}",
+                   "-bf", "0", "-g", str(gop), "-aud", "1", "-b:v", f"{a.bitrate}M"]
+            enc += {"nvenc": ["-preset", "p1", "-tune", "ull", "-zerolatency", "1"],
+                    "qsv": ["-preset", "veryfast", "-low_power", "1"],
+                    "amf": ["-usage", "ultralowlatency"]}[a.encoder]
+        elif a.encoder == "vaapi":
             enc = ["-vaapi_device", "/dev/dri/renderD128", "-vf", "format=nv12,hwupload",
                    "-c:v", "h264_vaapi", "-bf", "0", "-g", str(gop), "-aud", "1",
                    "-b:v", f"{a.bitrate}M"]
@@ -309,12 +358,13 @@ class Encoder:
                    "-tune", "zerolatency", "-profile:v", "high", "-bf", "0", "-g", str(gop),
                    "-b:v", f"{a.bitrate}M", "-maxrate", f"{a.bitrate * 2}M",
                    "-bufsize", f"{a.bitrate}M", "-x264-params", "aud=1:repeat-headers=1"]
-        return ["ffmpeg", "-hide_banner", "-loglevel", "error", "-fflags", "nobuffer"] + src + enc + ["-f", "h264", "-"]
+        return [ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-fflags", "nobuffer"] + src + enc + ["-f", "h264", "-"]
 
     def viewers_changed(self, n):
         with self.lock:
             if n and not self.proc:
-                self.proc = subprocess.Popen(self.command(), stdout=subprocess.PIPE)
+                self.proc = subprocess.Popen(self.command(), stdout=subprocess.PIPE,
+                                             creationflags=0x08000000 if IS_WINDOWS else 0)
                 threading.Thread(target=self._pump, args=(self.proc,), daemon=True).start()
                 log("encoder started")
             elif not n and self.proc:
@@ -372,6 +422,10 @@ def start_http():
 
 def broadcast_addresses():
     targets = {"255.255.255.255"}
+    for ip in local_ips():  # assume /24, the usual home / hotspot network
+        targets.add(ip.rsplit(".", 1)[0] + ".255")
+    if IS_WINDOWS:
+        return targets
     try:
         out = subprocess.run(["ip", "-4", "-o", "addr", "show"], capture_output=True, text=True).stdout
         targets.update(re.findall(r"brd (\d+\.\d+\.\d+\.\d+)", out))
@@ -391,7 +445,10 @@ def start_discovery():
 
     def listen():
         while True:
-            data, addr = sock.recvfrom(512)
+            try:
+                data, addr = sock.recvfrom(512)
+            except OSError:  # Windows reports ICMP "port unreachable" here
+                continue
             if data.startswith(b"MACSCREEN?"):
                 sock.sendto(message, addr)
 
@@ -409,6 +466,12 @@ def start_discovery():
 
 
 def local_ips():
+    if IS_WINDOWS:
+        try:
+            return [ip for ip in socket.gethostbyname_ex(socket.gethostname())[2]
+                    if not ip.startswith("127.")]
+        except OSError:
+            return []
     try:
         out = subprocess.run(["hostname", "-I"], capture_output=True, text=True).stdout.split()
         return [ip for ip in out if "." in ip]
@@ -419,15 +482,20 @@ def local_ips():
 # ---------------------------------------------------------------- main
 
 def main():
-    p = argparse.ArgumentParser(description="Use an Android phone as an extra display (X11).")
+    p = argparse.ArgumentParser(description="Use an Android phone as an extra display.")
     p.add_argument("--width", type=int, default=2400, help="virtual display width (default 2400)")
     p.add_argument("--height", type=int, default=1080, help="virtual display height (default 1080)")
     p.add_argument("--portrait", action="store_true", help="swap width and height")
     p.add_argument("--fps", type=int, default=60)
     p.add_argument("--bitrate", type=int, default=12, help="Mbit/s (default 12)")
     p.add_argument("--mirror", action="store_true", help="mirror the main screen instead of extending")
-    p.add_argument("--encoder", choices=["x264", "vaapi"], default="x264",
-                   help="x264 (CPU, works everywhere) or vaapi (Intel/AMD GPU)")
+    p.add_argument("--encoder", choices=["x264", "vaapi", "nvenc", "qsv", "amf"], default="x264",
+                   help="x264 (CPU, works everywhere); vaapi on Linux; nvenc/qsv/amf "
+                        "(NVIDIA/Intel/AMD GPU) on Windows")
+    p.add_argument("--monitor", type=int, default=None,
+                   help="Windows: which monitor to stream (see --list-monitors). "
+                        "Default: the last non-primary one, else the main screen")
+    p.add_argument("--list-monitors", action="store_true", help="Windows: list monitors and exit")
     p.add_argument("--source", choices=["screen", "test"], default="screen", help=argparse.SUPPRESS)
     args = p.parse_args()
     if args.portrait:
@@ -437,7 +505,23 @@ def main():
 
     display = None
     origin = (0, 0)
-    if args.source == "screen":
+    if IS_WINDOWS and args.source == "screen":
+        monitors = windows_monitors()
+        if args.list_monitors:
+            for i, x, y, w, h, primary in monitors:
+                print(f"{i}: {w}x{h} at {x},{y}{'  (main)' if primary else ''}")
+            return
+        if args.monitor is None:
+            extra = [m for m in monitors if not m[5]]
+            args.monitor = (extra[-1] if extra else monitors[0])[0]
+            if not extra:
+                log("only one monitor found, so the phone mirrors your main screen.")
+                log("to extend instead, install a virtual display driver (see the README) and restart.")
+        if not 0 <= args.monitor < len(monitors):
+            sys.exit(f"No monitor {args.monitor}. Run with --list-monitors.")
+        _, _, _, w, h, _ = monitors[args.monitor]
+        args.width, args.height = w & ~1, h & ~1
+    elif args.source == "screen":
         if os.environ.get("XDG_SESSION_TYPE") == "wayland" or not os.environ.get("DISPLAY"):
             sys.exit("ShareScreen needs an X11 session. On Ubuntu, log out, click the gear icon "
                      "and pick \"Ubuntu on Xorg\", then try again.")
@@ -454,9 +538,13 @@ def main():
     encoder = Encoder(args, origin, server)
     atexit.register(encoder.stop)
     server.on_viewers_changed = encoder.viewers_changed
-    server.start()
-    start_http()
-    start_discovery()
+    try:
+        server.start()
+        start_http()
+        start_discovery()
+    except OSError as e:
+        sys.exit(f"Can't open ports {HTTP_PORT}/{DISCOVERY_PORT}/{VIDEO_PORT} ({e}). "
+                 "Is ShareScreen already running?")
     server.status = "Connected. Waiting for the first frame…"
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
