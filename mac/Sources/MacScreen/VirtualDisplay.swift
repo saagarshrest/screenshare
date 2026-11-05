@@ -11,11 +11,11 @@ final class VirtualDisplay {
 
     var displayID: CGDirectDisplayID { display.displayID }
 
-    init?(width: Int, height: Int, hiDPI: Bool) {
+    init?(width: Int, height: Int, hiDPI: Bool, serial: UInt32 = 1) {
         let scale = hiDPI ? 2 : 1
         let descriptor = CGVirtualDisplayDescriptor()
         descriptor.queue = DispatchQueue.main
-        descriptor.name = "Phone Screen"
+        descriptor.name = serial == 1 ? "Phone Screen" : "Phone Screen \(serial)"
         descriptor.maxPixelsWide = UInt32(width * scale)
         descriptor.maxPixelsHigh = UInt32(height * scale)
         // Roughly a 13" laptop's density, so macOS picks sensible UI sizes.
@@ -24,7 +24,7 @@ final class VirtualDisplay {
                                               height: Double(height) * mmPerPoint)
         descriptor.vendorID = 0x5A57
         descriptor.productID = 0x0001
-        descriptor.serialNum = 0x0001
+        descriptor.serialNum = serial
         descriptor.terminationHandler = { _, _ in }
 
         guard let display = CGVirtualDisplay(descriptor: descriptor) else { return nil }

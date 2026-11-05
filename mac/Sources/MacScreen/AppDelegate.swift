@@ -59,6 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         get { defaults.object(forKey: "hidpi") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "hidpi") }
     }
+    private var extraScreens: [Int: ExtraScreen] = [:]
+    private var multiDisplay: Bool {
+        get { defaults.object(forKey: "multiDisplay") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "multiDisplay") }
+    }
     private var playSound: Bool {
         get { defaults.object(forKey: "sound") as? Bool ?? false }
         set { defaults.set(newValue, forKey: "sound") }
@@ -91,7 +96,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         capturer.onStop = { [weak self] _ in DispatchQueue.main.async { self?.stop() } }
         server.onViewerCountChanged = { [weak self] in self?.webViewers = $0; self?.viewersChanged() }
         video.onViewerCountChanged = { [weak self] in self?.appViewers = $0; self?.viewersChanged() }
-        video.onNeedKeyframe = { [weak self] in self?.currentEncoder()?.requestKeyframe() }
+        video.onNeedKeyframe = { [weak self] channel in
+            guard let self else { return }
+            if channel == 0 { self.currentEncoder()?.requestKeyframe() }
+            else { DispatchQueue.main.async { self.extraScreens[channel]?.requestKeyframe() } }
+        }
+        video.multiDisplay = multiDisplay
+        video.onExtraChannelsChanged = { [weak self] in self?.updateExtraScreens($0) }
 
         do {
             try server.start()
@@ -167,6 +178,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setEncoder(nil)
         broadcast(status: "Your Mac's display is off. Start it from the Mac menu bar.")
         updateIcon()
+    }
+
+    /// Create a display for each extra phone; remove it when that phone leaves.
+    private func updateExtraScreens(_ channels: Set<Int>) {
+        for (channel, screen) in extraScreens where !channels.contains(channel) {
+            screen.stop()
+            extraScreens[channel] = nil
+        }
+        for channel in channels where extraScreens[channel] == nil {
+            extraScreens[channel] = ExtraScreen(
+                channel: channel, size: DisplaySize.all[sizeIndex], hiDPI: hiDPI,
+                quality: StreamQuality.all[qualityIndex], video: video,
+                outputSize: { [weak self] in self?.outputSize(for: $0, maxWidth: $1) ?? (1280, 720) })
+        }
     }
 
     private func restartIfRunning() {
@@ -268,6 +293,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         qualityItem.submenu = qualityMenu
         menu.addItem(qualityItem)
 
+        let multi = item("Each Phone Gets Its Own Display", #selector(toggleMultiDisplay))
+        multi.state = multiDisplay ? .on : .off
+        menu.addItem(multi)
+
         let sound = item("Play Sound on Phone", #selector(toggleSound))
         sound.state = playSound ? .on : .off
         menu.addItem(sound)
@@ -292,6 +321,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func pickQuality(_ sender: NSMenuItem) { qualityIndex = sender.tag; restartIfRunning() }
     @objc private func toggleHiDPI() { hiDPI.toggle(); restartIfRunning() }
     @objc private func toggleAutoStart() { autoStart.toggle() }
+    @objc private func toggleMultiDisplay() {
+        multiDisplay.toggle()
+        video.multiDisplay = multiDisplay // applies to phones that connect from now on
+    }
     @objc private func toggleSound() { playSound.toggle(); restartIfRunning() }
     @objc private func quit() { stop(); NSApp.terminate(nil) }
 

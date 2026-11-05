@@ -10,17 +10,26 @@ import Network
 ///   type 5 = audio (PCM s16le, 48 kHz, stereo)
 /// If a viewer can't keep up, we drop frames until the next keyframe instead of
 /// letting a backlog (= lag) build up.
+///
+/// Channels: channel 0 is the main extra display. With `multiDisplay` on, each
+/// additional phone gets its own channel (1, 2, …) backed by its own display.
 final class VideoServer {
     static let port: UInt16 = 8783
 
     var onViewerCountChanged: ((Int) -> Void)?
     /// Called (on any queue) when a viewer needs a fresh keyframe.
-    var onNeedKeyframe: (() -> Void)?
+    var onNeedKeyframe: ((Int) -> Void)?
+    /// Channels > 0 that currently have a phone (called on the main queue).
+    var onExtraChannelsChanged: ((Set<Int>) -> Void)?
+    /// Give each additional phone its own channel instead of sharing channel 0.
+    var multiDisplay = false
+    static let maxChannels = 3
 
     private final class Viewer {
         let connection: NWConnection
         var pendingBytes = 0
         var waitingForKeyframe = true
+        var channel = 0
         init(_ connection: NWConnection) { self.connection = connection }
     }
 
@@ -31,8 +40,8 @@ final class VideoServer {
     private var listener: NWListener?
     private var connecting: [ObjectIdentifier: Viewer] = [:]
     private var viewers: [ObjectIdentifier: Viewer] = [:]
-    private var config: Data?
-    private var size = (width: 0, height: 0)
+    private var configs: [Int: Data] = [:]
+    private var sizes: [Int: (width: Int, height: Int)] = [:]
     private var status = "Starting your Mac's display…"
     private let countLock = NSLock()
     private var _count = 0
@@ -51,30 +60,32 @@ final class VideoServer {
     }
 
     /// The encoder changed size (new display or quality): forget the old config.
-    func reset(width: Int, height: Int) {
+    func reset(width: Int, height: Int, channel: Int = 0) {
         queue.async {
-            self.size = (width, height)
-            self.config = nil
-            for viewer in self.viewers.values { viewer.waitingForKeyframe = true }
+            self.sizes[channel] = (width, height)
+            self.configs[channel] = nil
+            for viewer in self.viewers.values where viewer.channel == channel { viewer.waitingForKeyframe = true }
         }
     }
 
-    func send(config annexB: Data) {
+    func send(config annexB: Data, channel: Int = 0) {
         queue.async {
+            let size = self.sizes[channel] ?? (0, 0)
             var payload = Data()
-            payload.append(UInt32(self.size.width).bigEndianData)
-            payload.append(UInt32(self.size.height).bigEndianData)
+            payload.append(UInt32(size.width).bigEndianData)
+            payload.append(UInt32(size.height).bigEndianData)
             payload.append(annexB)
-            self.config = payload
+            self.configs[channel] = payload
         }
     }
 
-    func send(frame: Data, isKey: Bool) {
+    func send(frame: Data, isKey: Bool, channel: Int = 0) {
         queue.async {
             var needKey = false
-            for viewer in self.viewers.values {
+            let config = self.configs[channel]
+            for viewer in self.viewers.values where viewer.channel == channel {
                 if viewer.waitingForKeyframe {
-                    guard isKey, let config = self.config else { needKey = true; continue }
+                    guard isKey, let config else { needKey = true; continue }
                     viewer.waitingForKeyframe = false
                     self.write(type: 1, config, to: viewer)
                 } else if viewer.pendingBytes > self.maxBacklog {
@@ -82,19 +93,19 @@ final class VideoServer {
                     viewer.waitingForKeyframe = true
                     needKey = true
                     continue
-                } else if isKey, let config = self.config {
+                } else if isKey, let config {
                     self.write(type: 1, config, to: viewer)
                 }
                 self.write(type: isKey ? 2 : 3, frame, to: viewer)
             }
-            if needKey { self.onNeedKeyframe?() }
+            if needKey { self.onNeedKeyframe?(channel) }
         }
     }
 
     /// Sound goes only to phones that are already showing video and keeping up.
     func send(audio pcm: Data) {
         queue.async {
-            for viewer in self.viewers.values where !viewer.waitingForKeyframe && viewer.pendingBytes < self.maxBacklog {
+            for viewer in self.viewers.values where viewer.channel == 0 && !viewer.waitingForKeyframe && viewer.pendingBytes < self.maxBacklog {
                 self.write(type: 5, pcm, to: viewer)
             }
         }
@@ -103,7 +114,7 @@ final class VideoServer {
     func send(status text: String) {
         queue.async {
             self.status = text
-            for viewer in self.viewers.values {
+            for viewer in self.viewers.values where viewer.channel == 0 {
                 viewer.waitingForKeyframe = true
                 self.write(type: 4, Data(text.utf8), to: viewer)
             }
@@ -121,11 +132,13 @@ final class VideoServer {
             switch state {
             case .ready:
                 self.connecting.removeValue(forKey: id)
+                viewer.channel = self.freeChannel()
                 self.viewers[id] = viewer
                 self.updateCount()
-                self.write(type: 4, Data(self.status.utf8), to: viewer)
+                let text = viewer.channel == 0 ? self.status : "Adding a display for this phone…"
+                self.write(type: 4, Data(text.utf8), to: viewer)
                 self.receiveLoop(viewer)
-                self.onNeedKeyframe?()
+                self.onNeedKeyframe?(viewer.channel)
             case .failed, .cancelled:
                 self.remove(viewer)
             default:
@@ -141,7 +154,7 @@ final class VideoServer {
             if let data, !data.isEmpty {
                 // The phone reset its decoder and needs a keyframe.
                 viewer.waitingForKeyframe = true
-                self.onNeedKeyframe?()
+                self.onNeedKeyframe?(viewer.channel)
             }
             if done || error != nil { self.remove(viewer); return }
             self.receiveLoop(viewer)
@@ -171,10 +184,21 @@ final class VideoServer {
         if wasViewer { updateCount() }
     }
 
+    /// Channel 0 unless multi-display is on and channel 0 is taken.
+    private func freeChannel() -> Int {
+        guard multiDisplay else { return 0 }
+        let used = Set(viewers.values.map(\.channel))
+        return (0..<Self.maxChannels).first { !used.contains($0) } ?? 0
+    }
+
     private func updateCount() {
         let count = viewers.count
+        let extra = Set(viewers.values.map(\.channel).filter { $0 > 0 })
         countLock.lock(); _count = count; countLock.unlock()
-        DispatchQueue.main.async { self.onViewerCountChanged?(count) }
+        DispatchQueue.main.async {
+            self.onViewerCountChanged?(count)
+            self.onExtraChannelsChanged?(extra)
+        }
     }
 }
 
