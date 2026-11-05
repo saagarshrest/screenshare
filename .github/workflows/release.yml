@@ -17,20 +17,20 @@ jobs:
   mac:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build app and DMG
         working-directory: mac
         env:
           MACSCREEN_ADHOC: "1"
         run: bash ./build.sh dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: mac, path: mac/ShareScreen.dmg }
 
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: "17" }
       # The Ubuntu runner already ships the Android SDK (ANDROID_HOME).
       - name: Build APK
@@ -39,13 +39,13 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk ../ShareScreen.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: android, path: ShareScreen.apk }
 
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build .deb
         env:
           VERSION: ${{ github.event.inputs.tag || github.ref_name }}
@@ -54,15 +54,15 @@ jobs:
           VERSION="$VERSION" bash linux/build-deb.sh
           dpkg-deb --info linux/ShareScreen.deb
           python3 -m py_compile host/sharescreen.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: linux, path: linux/ShareScreen.deb }
 
   windows:
     runs-on: windows-latest
     defaults: { run: { shell: bash } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Fetch ffmpeg (GPL build with ddagrab, x264, NVENC, QSV, AMF)
         run: |
@@ -94,7 +94,7 @@ jobs:
           print("ok, got config + keyframe")
           PY
           taskkill //F //IM ShareScreen.exe || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: |
@@ -107,9 +107,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { path: dist, merge-multiple: true }
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: dist/*
