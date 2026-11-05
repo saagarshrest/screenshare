@@ -78,6 +78,12 @@ From a terminal you can also run `sharescreen --portrait`, `--mirror`, `--qualit
 
 ShareScreen uses your graphics card (NVIDIA, Intel or AMD) for encoding when it can, and falls back to the CPU. The app bundles an unmodified [FFmpeg](https://ffmpeg.org) under GPL v3; see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Its source is attached to every release as `ffmpeg-source.tar.gz`.
 
+### 2b. iPhone / iPad (build it yourself)
+
+There's no App Store version. With a Mac and Xcode you can install it on your own device with a free Apple ID:
+open `ios/ShareScreen.xcodeproj`, pick your team under **Signing & Capabilities**, choose your iPhone and press **Run**.
+It finds your computer by checking every address on your Wi‑Fi, or you can type the address. Tap the screen for stats.
+
 ### 2. Android
 
 1. Copy `ShareScreen.apk` to your phone and open it. Allow "Install unknown apps" when asked.
@@ -144,6 +150,7 @@ On Windows, arrange the extra monitor in **Settings → System → Display**; on
 | **Display Size** | Phone‑shaped (landscape or portrait) or 16:9. **Sharp text (HiDPI)** makes text crisper but uses more bandwidth. |
 | **Stream Quality** | **Fast** for Wi‑Fi, **Sharp** for USB. |
 | **Play Sound on Phone** | Plays the Mac's sound on the phone too. |
+| **Each Phone Gets Its Own Display** | A second or third phone gets its own extra display instead of sharing the first one. |
 
 Arrange the new display next to your Mac's screen in **System Settings → Displays → Arrange…**
 
