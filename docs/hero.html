@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- Source for docs/hero.png. Render: see docs/render-hero.sh -->
+<html><head><meta charset="utf-8"><title>ShareScreen hero</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1600px; height: 820px; overflow: hidden; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+    background: radial-gradient(700px 420px at 72% 22%, #26306a 0%, rgba(38,48,106,0) 70%),
+                linear-gradient(180deg, #121733 0%, #0d1024 100%);
+    color: #fff; position: relative;
+  }
+  .left { position: absolute; left: 110px; top: 182px; width: 600px; }
+  .icon { width: 96px; height: 96px; border-radius: 22px; background: linear-gradient(160deg,#252c52,#181d3b);
+          box-shadow: 0 10px 30px rgba(0,0,0,.35); display: grid; place-items: center; }
+  h1 { font-size: 92px; font-weight: 800; letter-spacing: -2.5px; margin-top: 46px; line-height: 1; }
+  p { font-size: 30px; line-height: 1.4; color: #b7bfdc; margin-top: 40px; }
+  .pills { display: flex; gap: 12px; margin-top: 38px; flex-wrap: wrap; width: 640px; }
+  .pill { font-size: 20px; padding: 10px 18px; border-radius: 999px; background: #1b2140;
+          border: 1px solid #2c3459; color: #e6e9f5; }
+  .pill.os { background: #2a2f63; border-color: #4b55a8; }
+  .screen-grad { background: linear-gradient(135deg, #5b8def 0%, #7b6cf0 55%, #8a5cf6 100%); }
+  .laptop { position: absolute; left: 720px; top: 210px; width: 600px; height: 380px; border-radius: 26px;
+            background: #dfe3f0; padding: 16px; }
+  .laptop .screen { width: 100%; height: 100%; border-radius: 12px; position: relative; overflow: hidden; }
+  .base { position: absolute; left: 680px; top: 590px; width: 662px; height: 28px; background: #c3c8db;
+          clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%); }
+  .win { position: absolute; background: linear-gradient(180deg,#fff,#e4e7f3); border-radius: 8px;
+         box-shadow: 0 12px 30px rgba(30,20,90,.3); }
+  .win .bar { height: 30px; display: flex; gap: 8px; align-items: center; padding-left: 14px; }
+  .win .bar i { width: 11px; height: 11px; border-radius: 3px; background: #aab2d3; }
+  .line { height: 11px; border-radius: 6px; background: #b6bfe0; margin: 18px 0 0 18px; }
+  .task { position: absolute; left: 174px; bottom: 14px; width: 220px; height: 30px; border-radius: 8px;
+          background: rgba(255,255,255,.22); }
+  .phone { position: absolute; left: 1340px; top: 240px; width: 200px; height: 400px; border-radius: 36px;
+           background: #dfe3f0; padding: 12px; }
+  .phone .screen { width: 100%; height: 100%; border-radius: 26px; position: relative; overflow: hidden; }
+</style></head>
+<body>
+  <div class="left">
+    <div class="icon">
+      <svg width="64" height="40" viewBox="0 0 64 40">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b8def"/><stop offset="1" stop-color="#8a5cf6"/></linearGradient></defs>
+        <rect x="2" y="2" width="44" height="30" rx="3" fill="url(#g)" stroke="#dfe3f0" stroke-width="2.5"/>
+        <rect x="0" y="34" width="48" height="3" rx="1.5" fill="#c3c8db"/>
+        <rect x="50" y="10" width="13" height="26" rx="3" fill="url(#g)" stroke="#dfe3f0" stroke-width="2.5"/>
+        <rect x="26" y="12" width="14" height="10" rx="1.5" fill="#fff" opacity=".9"/>
+      </svg>
+    </div>
+    <h1>ShareScreen</h1>
+    <p>Turn your Android phone into a second display for your Mac, Windows or Linux computer. Free, open source, no account.</p>
+    <div class="pills">
+      <span class="pill os">macOS · Windows · Linux</span>
+      <span class="pill">60 fps H.264</span>
+      <span class="pill">USB or Wi‑Fi</span>
+    </div>
+  </div>
+
+  <div class="laptop"><div class="screen screen-grad">
+    <div class="win" style="left:330px;top:110px;width:240px;height:170px">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="line" style="width:170px"></div><div class="line" style="width:120px"></div><div class="line" style="width:150px"></div>
+    </div>
+    <div class="task"></div>
+  </div></div>
+  <div class="base"></div>
+
+  <div class="phone"><div class="screen screen-grad">
+    <div class="win" style="left:-20px;top:80px;width:150px;height:170px">
+      <div class="bar" style="padding-left:0"></div>
+      <div class="line" style="width:90px;margin-left:30px"></div><div class="line" style="width:60px;margin-left:30px"></div><div class="line" style="width:80px;margin-left:30px"></div>
+    </div>
+  </div></div>
+</body></html>

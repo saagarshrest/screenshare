@@ -13,14 +13,14 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Open ShareScreen on the Mac
+        1. Open ShareScreen on the computer
         2. Connect the phone over USB
         3. ...
   - type: input
-    id: mac
+    id: computer
     attributes:
-      label: Mac model and macOS version
-      placeholder: MacBook Air M2, macOS 26.1
+      label: Computer and OS version
+      placeholder: MacBook Air M2, macOS 26.1 / Dell XPS, Windows 11 24H2 / ThinkPad, Ubuntu 24.04 (Xorg)
     validations: { required: true }
   - type: input
     id: phone

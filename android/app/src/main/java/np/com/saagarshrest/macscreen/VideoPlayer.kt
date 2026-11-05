@@ -38,7 +38,7 @@ class VideoPlayer(
         setTextColor(Color.parseColor("#8B9099"))
         textSize = 15f
         gravity = Gravity.CENTER
-        text = "Connecting to your Mac…"
+        text = "Connecting to your computer…"
     }
     private val main = Handler(Looper.getMainLooper())
 
@@ -191,7 +191,7 @@ class VideoPlayer(
 
     private var lastKeyRequest = 0L
 
-    /** Ask the Mac for a fresh keyframe (after the decoder was reset). */
+    /** Ask the computer for a fresh keyframe (after the decoder was reset). */
     private fun requestKeyframe() {
         val now = System.currentTimeMillis()
         if (now - lastKeyRequest < 500) return
@@ -204,7 +204,7 @@ class VideoPlayer(
         val c = codec ?: run { requestKeyframe(); return }
         try {
             val index = c.dequeueInputBuffer(20_000)
-            if (index < 0) return // decoder busy: drop (the Mac sends a fresh keyframe if we fall behind)
+            if (index < 0) return // decoder busy: drop (the computer sends a fresh keyframe if we fall behind)
             val input = c.getInputBuffer(index) ?: return
             input.clear()
             input.put(data, 0, length)

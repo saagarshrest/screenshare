@@ -34,7 +34,7 @@ import java.net.URL
 import kotlin.concurrent.thread
 
 /**
- * One tap: finds the Mac (USB → last address → local network broadcast)
+ * One tap: finds the computer (USB → last address → local network broadcast)
  * and shows its extra display full screen.
  */
 class MainActivity : Activity() {
@@ -88,12 +88,12 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    // region Finding the Mac
+    // region Finding the computer
 
     private fun startSearch() {
         if (searching) return
         searching = true
-        setStatus("Looking for your Mac…", showActions = false)
+        setStatus("Looking for your computer…", showActions = false)
         thread(name = "find-mac") {
             val host = findMac()
             searching = false
@@ -101,7 +101,7 @@ class MainActivity : Activity() {
                 if (isFinishing) return@runOnUiThread
                 if (host != null) openViewer(host)
                 else setStatus(
-                    "Couldn't find your Mac.\n\nMake sure ShareScreen is running on the Mac and both are on the same Wi‑Fi or hotspot.",
+                    "Couldn't find your computer.\n\nMake sure ShareScreen is running on it and both are on the same Wi‑Fi or hotspot.",
                     showActions = true
                 )
             }
@@ -126,7 +126,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Video port the Mac offers for the native player (0 = only the browser stream). */
+    /** Video port the computer offers for the native player (0 = only the browser stream). */
     @Volatile private var videoPort = 0
 
     private fun ping(host: String): Boolean = try {
@@ -199,7 +199,7 @@ class MainActivity : Activity() {
         prefs.edit().putString(KEY_LAST, host).apply()
         if (videoPort == 0) { openWebViewer(host); return }
         val p = VideoPlayer(this, host, videoPort) {
-            // Connection dropped: go back and look for the Mac again.
+            // Connection dropped: go back and look for the computer again.
             closeViewer()
             startSearch()
         }
@@ -321,8 +321,8 @@ class MainActivity : Activity() {
             setText(prefs.getString(KEY_LAST, "") ?: "")
         }
         AlertDialog.Builder(this)
-            .setTitle("Mac's address")
-            .setMessage("Shown in the ShareScreen menu on your Mac.")
+            .setTitle("Computer's address")
+            .setMessage("Shown by ShareScreen on your computer.")
             .setView(input)
             .setPositiveButton("Connect") { _, _ ->
                 val host = input.text.toString().trim()

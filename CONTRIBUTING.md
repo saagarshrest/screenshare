@@ -4,7 +4,7 @@ Thanks for your interest! Bug reports, ideas and pull requests are all welcome.
 
 ## Reporting bugs
 
-Open an [issue](../../issues/new/choose) using the **Bug report** form. Include your Mac and phone models, how they're connected (USB, Wi‑Fi or hotspot), and screenshots of any alerts.
+Open an [issue](../../issues/new/choose) using the **Bug report** form. Include your computer (Mac, Windows or Linux, and OS version) and phone models, how they're connected (USB, Wi‑Fi or hotspot), and screenshots of any alerts.
 
 ## Development setup
 

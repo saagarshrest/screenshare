@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hero.png" alt="ShareScreen: use your Android phone as a second display for your Mac" width="100%">
+  <img src="docs/hero.png" alt="ShareScreen: use your Android phone as a second display for your Mac, Windows or Linux computer" width="100%">
 </p>
 
 # ShareScreen
@@ -12,16 +12,16 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/saagarshrest/screenshare?style=flat-square&color=3DD68C"></a>
 </p>
 
-Use your **Android phone as an extra display for your Mac**. Drag windows onto it like a real monitor.
+Use your **Android phone as an extra display for your Mac, Windows PC or Linux computer**. Drag windows onto it like a real monitor.
 
 - **60 fps hardware H.264** streaming with very low delay
 - **USB or Wi‑Fi**, including your phone's own hotspot with no internet
 - **No accounts, no cloud.** Everything stays on your local network
-- **Finds your Mac automatically**, so you never type an IP address
+- **Finds your computer automatically**, so you never type an IP address
 - Portrait or landscape, with adjustable size and quality
 - Free and open source ([MIT](LICENSE))
 
-> Display only: touch on the phone doesn't control the Mac.
+> Display only: touch on the phone doesn't control the computer.
 
 ---
 
@@ -40,7 +40,9 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 
 ## Install
 
-### 1. Mac
+Install ShareScreen on **your computer** (pick your OS), then on **your phone**.
+
+### 1a. Mac
 
 1. Open `ShareScreen.dmg` and drag **ShareScreen** into **Applications**.
 2. The app isn't notarized by Apple, so macOS shows *"ShareScreen.app" Not Opened* the first time. Click **Done** (not Move to Trash), then either go to System Settings → **Privacy & Security** → **Open Anyway**, or run:
@@ -53,7 +55,7 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 
 A new icon appears in your menu bar.
 
-### 1b. Ubuntu / Debian (instead of a Mac)
+### 1b. Ubuntu / Debian
 
 ```bash
 sudo apt install ./ShareScreen.deb
@@ -63,7 +65,7 @@ sharescreen --portrait   # or --mirror, --width 2400 --height 1080, --encoder va
 
 It needs an **X11 session**. On Ubuntu, log out, click the gear icon and pick **Ubuntu on Xorg**. Wayland isn't supported yet. Press Ctrl+C to stop; the extra monitor is removed when it exits. For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
 
-### 1c. Windows (instead of a Mac)
+### 1c. Windows
 
 1. Run `ShareScreen.exe`. If SmartScreen warns, click **More info → Run anyway**. Allow it on **private networks** when Windows Firewall asks.
 2. With one monitor, the phone **mirrors** your screen. To use the phone as an **extra** screen, first install the free [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), set its resolution to your phone's (e.g. 2400×1080), and restart ShareScreen. It streams the extra monitor automatically.
@@ -74,9 +76,9 @@ The exe bundles an unmodified [FFmpeg](https://ffmpeg.org) under GPL v3; see [TH
 ### 2. Android
 
 1. Copy `ShareScreen.apk` to your phone and open it. Allow "Install unknown apps" when asked.
-2. Open **ShareScreen**. It finds your Mac and the extra display turns on by itself.
+2. Open **ShareScreen**. It finds your computer and the extra display turns on by itself.
 
-Both devices must be on the same Wi‑Fi, or the Mac connected to the phone's hotspot.
+Both devices must be on the same Wi‑Fi, or the computer connected to the phone's hotspot.
 
 ---
 
@@ -89,7 +91,7 @@ USB is the smoothest option. It needs `adb` and USB debugging on the phone.
 2. Settings → Developer options (on Xiaomi: Additional settings → Developer options) → turn on **USB debugging**.
 3. Plug the phone in and tap **Allow** on the "Allow USB debugging?" prompt.
 
-**Install adb on the Mac.** Pick one:
+**Install adb on the computer.** On Ubuntu: `sudo apt install adb`. On Windows: download [Platform Tools](https://developer.android.com/tools/releases/platform-tools). On a Mac, pick one:
 ```bash
 # With Homebrew
 brew install android-platform-tools
@@ -111,7 +113,9 @@ Then open ShareScreen on the phone. It uses USB automatically when it's availabl
 
 ## Using it
 
-Click the ShareScreen icon in the Mac menu bar:
+**Windows and Linux:** ShareScreen runs in a terminal window; see the options in the install steps above. Press Ctrl+C to stop. On Windows, arrange the extra monitor in **Settings → System → Display**; on Ubuntu, in **Settings → Displays**.
+
+**Mac:** click the ShareScreen icon in the menu bar:
 
 | Menu | What it does |
 |---|---|
@@ -127,11 +131,12 @@ Arrange the new display next to your Mac's screen in **System Settings → Displ
 ## Troubleshooting
 
 <details>
-<summary><b>Phone says "Looking for your Mac…"</b></summary>
+<summary><b>Phone says "Looking for your computer…"</b></summary>
 
-- Make sure ShareScreen is running (its icon is in the menu bar) and both devices are on the same network.
-- Check that **Local Network** is allowed: System Settings → Privacy & Security → Local Network.
-- On the phone, tap **Enter address** and type the IP shown in the ShareScreen menu.
+- Make sure ShareScreen is running (on a Mac, its icon is in the menu bar) and both devices are on the same network.
+- On Windows, allow ShareScreen through Windows Firewall on **private networks**. On Ubuntu with a firewall, allow ports 8780, 8782 (UDP) and 8783.
+- On a Mac, check that **Local Network** is allowed: System Settings → Privacy & Security → Local Network.
+- On the phone, tap **Enter address** and type the IP shown in the ShareScreen menu (Mac) or terminal window (Windows, Linux).
 - Over USB, run the `adb reverse` command again.
 </details>
 
@@ -201,11 +206,14 @@ Mac (menu bar app)                                         Android
 virtual display ─▶ ScreenCaptureKit ─▶ VideoToolbox H.264 ─tcp:8783─▶ MediaCodec ─▶ SurfaceView
 UDP beacon :8782 ──────────────────────────────────────────────────▶ auto‑discovery
 HTTP :8780 / WebSocket :8781 (JPEG) ───────────────────────────────▶ any browser (QR code)
+
+Windows / Linux (host/sharescreen.py)
+monitor ─▶ ffmpeg (ddagrab / x11grab) ─▶ x264 or GPU H.264 ────tcp:8783─▶ same Android app
 ```
 
-- The extra monitor is created with Apple's private `CGVirtualDisplay` API, the same one used by BetterDisplay and DeskPad. A future macOS update could break it.
+- On the Mac, the extra monitor is created with Apple's private `CGVirtualDisplay` API, the same one used by BetterDisplay and DeskPad. A future macOS update could break it.
 - Frames are only sent when the screen changes, so a still screen uses almost no data.
-- If the network falls behind, the Mac skips ahead to a fresh keyframe instead of building up lag.
+- If the network falls behind, the computer skips ahead to a fresh keyframe instead of building up lag.
 
 | Port | Use |
 |---|---|
