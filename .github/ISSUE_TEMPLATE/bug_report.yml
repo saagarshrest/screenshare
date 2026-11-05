@@ -1,0 +1,46 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ShareScreen on the Mac
+        2. Connect the phone over USB
+        3. ...
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and macOS version
+      placeholder: MacBook Air M2, macOS 26.1
+    validations: { required: true }
+  - type: input
+    id: phone
+    attributes:
+      label: Phone model and Android version
+      placeholder: Redmi 13, Android 14
+    validations: { required: true }
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options: [USB (adb), Wi‑Fi, Phone hotspot, Browser / QR code]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: ShareScreen version
+      placeholder: v1.0.0
+  - type: textarea
+    id: logs
+    attributes:
+      label: Screenshots or logs
+      description: Screenshots of any alerts, or Terminal output.

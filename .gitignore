@@ -9,3 +9,5 @@ android/local.properties
 android/.kotlin/
 *.apk
 .DS_Store
+__pycache__/
+*.pyc

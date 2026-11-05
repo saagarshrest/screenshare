@@ -4,6 +4,14 @@
 
 # ShareScreen
 
+<p>
+  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/saagarshrest/screenshare?style=flat-square&color=5B8DEF"></a>
+  <a href="../../actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/saagarshrest/screenshare/ci.yml?branch=main&style=flat-square&label=build"></a>
+  <a href="../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/saagarshrest/screenshare/total?style=flat-square&color=8A5CF6"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android-2b3557?style=flat-square">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/saagarshrest/screenshare?style=flat-square&color=3DD68C"></a>
+</p>
+
 Use your **Android phone as an extra display for your Mac**. Drag windows onto it like a real monitor.
 
 - **60 fps hardware H.264** streaming with very low delay
@@ -35,8 +43,7 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 ### 1. Mac
 
 1. Open `ShareScreen.dmg` and drag **ShareScreen** into **Applications**.
-2. The app isn't signed with a paid Apple certificate, so the first launch needs one extra step. Right‑click **ShareScreen** in Applications, choose **Open**, then click **Open** again.
-   If macOS still blocks it, run:
+2. The app isn't notarized by Apple, so macOS shows *"ShareScreen.app" Not Opened* the first time. Click **Done** (not Move to Trash), then either go to System Settings → **Privacy & Security** → **Open Anyway**, or run:
    ```bash
    xattr -dr com.apple.quarantine /Applications/ShareScreen.app
    open /Applications/ShareScreen.app
