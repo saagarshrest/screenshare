@@ -2,6 +2,9 @@ package np.com.saagarshrest.macscreen
 
 import android.content.Context
 import android.graphics.Color
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.os.Build
@@ -17,6 +20,7 @@ import java.io.DataInputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
@@ -25,6 +29,8 @@ import kotlin.concurrent.withLock
 /**
  * Native low-latency player: raw H.264 over TCP → hardware MediaCodec → SurfaceView.
  * Frames are shown the moment they're decoded (no buffering, no browser).
+ * Optional sound (packet type 5, PCM 48 kHz stereo) plays through AudioTrack.
+ * Tap the screen to show or hide live stats.
  */
 class VideoPlayer(
     context: Context,
@@ -40,7 +46,39 @@ class VideoPlayer(
         gravity = Gravity.CENTER
         text = "Connecting to your computer…"
     }
+    private val statsView = TextView(context).apply {
+        setTextColor(Color.WHITE)
+        textSize = 12f
+        typeface = android.graphics.Typeface.MONOSPACE
+        setBackgroundColor(Color.parseColor("#99000000"))
+        setPadding(18, 12, 18, 12)
+        visibility = GONE
+    }
     private val main = Handler(Looper.getMainLooper())
+
+    // Stats, counted on the network/render threads and shown once a second.
+    @Volatile private var bytesIn = 0L
+    @Volatile private var framesShown = 0
+    @Volatile private var framesDropped = 0
+    @Volatile private var latencySumUs = 0L
+    @Volatile private var latencyCount = 0
+    @Volatile private var audioActive = false
+    private val statsTick = object : Runnable {
+        override fun run() {
+            val mbps = bytesIn * 8 / 1_000_000.0
+            val lat = if (latencyCount > 0) latencySumUs / latencyCount / 1000.0 else 0.0
+            statsView.text = String.format(
+                "%dx%d  %d fps\n%.1f Mbit/s\ndecode %.1f ms\ndropped %d%s",
+                videoWidth, videoHeight, framesShown, mbps, lat, framesDropped,
+                if (audioActive) "\nsound on" else "")
+            bytesIn = 0; framesShown = 0; latencySumUs = 0; latencyCount = 0
+            if (statsView.visibility == VISIBLE) main.postDelayed(this, 1000)
+        }
+    }
+
+    // Sound: a small queue between the network thread and the AudioTrack writer.
+    private val audioQueue = ArrayBlockingQueue<ByteArray>(8) // 8 × 20 ms
+    @Volatile private var audioTrack: AudioTrack? = null
 
     @Volatile private var running = false
     @Volatile private var codec: MediaCodec? = null
@@ -56,7 +94,19 @@ class VideoPlayer(
         setBackgroundColor(Color.BLACK)
         addView(surfaceView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         addView(statusView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(statsView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
+            .apply { setMargins(24, 24, 0, 0) })
         surfaceView.holder.addCallback(this)
+        setOnClickListener {
+            if (statsView.visibility == VISIBLE) {
+                statsView.visibility = GONE
+            } else {
+                statsView.visibility = VISIBLE
+                statsView.text = "…"
+                main.removeCallbacks(statsTick)
+                main.postDelayed(statsTick, 1000)
+            }
+        }
     }
 
     fun start() {
@@ -69,6 +119,8 @@ class VideoPlayer(
         running = false
         try { socket?.close() } catch (_: Exception) {}
         releaseCodec()
+        releaseAudio()
+        main.removeCallbacks(statsTick)
     }
 
     // region Surface
@@ -121,6 +173,7 @@ class VideoPlayer(
                 if (length < 0 || length > (32 shl 20)) throw IllegalStateException("bad packet")
                 if (buffer.size < length) buffer = ByteArray(length + (length shr 2))
                 input.readFully(buffer, 0, length)
+                bytesIn += length + 5
                 when (type) {
                     1 -> onConfig(buffer, length)
                     2, 3 -> onFrame(buffer, length, isKey = type == 2)
@@ -128,12 +181,14 @@ class VideoPlayer(
                         val text = String(buffer, 0, length, Charsets.UTF_8)
                         main.post { statusView.text = text; statusView.visibility = VISIBLE; shownFirstFrame = false }
                     }
+                    5 -> onAudio(buffer, length)
                 }
             }
         } catch (_: Exception) {
         } finally {
             try { socket?.close() } catch (_: Exception) {}
             releaseCodec()
+            releaseAudio()
             if (running) {
                 running = false
                 main.post { onDisconnected() }
@@ -204,7 +259,7 @@ class VideoPlayer(
         val c = codec ?: run { requestKeyframe(); return }
         try {
             val index = c.dequeueInputBuffer(20_000)
-            if (index < 0) return // decoder busy: drop (the computer sends a fresh keyframe if we fall behind)
+            if (index < 0) { framesDropped++; return } // decoder busy: drop (the computer sends a fresh keyframe if we fall behind)
             val input = c.getInputBuffer(index) ?: return
             input.clear()
             input.put(data, 0, length)
@@ -226,9 +281,13 @@ class VideoPlayer(
                     val next = c.dequeueOutputBuffer(info, 0)
                     if (next < 0) break
                     c.releaseOutputBuffer(index, false)
+                    framesDropped++
                     index = next
                 }
                 c.releaseOutputBuffer(index, true)
+                framesShown++
+                latencySumUs += System.nanoTime() / 1000 - info.presentationTimeUs
+                latencyCount++
                 if (!shownFirstFrame) {
                     shownFirstFrame = true
                     main.post { statusView.visibility = GONE }
@@ -238,6 +297,54 @@ class VideoPlayer(
             }
         }
     }
+
+    // region Sound
+
+    private fun onAudio(data: ByteArray, length: Int) {
+        if (audioTrack == null) startAudio()
+        // Keep latency low: if the speaker falls behind, drop the oldest chunk.
+        val chunk = data.copyOf(length)
+        if (!audioQueue.offer(chunk)) { audioQueue.poll(); audioQueue.offer(chunk) }
+    }
+
+    private fun startAudio() {
+        val rate = 48_000
+        val minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
+        val track = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
+                .setAudioFormat(AudioFormat.Builder()
+                    .setSampleRate(rate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
+                .setBufferSizeInBytes(maxOf(minBuf, rate * 4 / 25)) // ~40 ms
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .apply { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY) }
+                .build()
+        } catch (_: Exception) { return }
+        audioTrack = track
+        audioActive = true
+        track.play()
+        thread(name = "audio-out", priority = Thread.MAX_PRIORITY) {
+            while (running && audioTrack === track) {
+                val chunk = try { audioQueue.poll(200, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { null } ?: continue
+                try { track.write(chunk, 0, chunk.size) } catch (_: Exception) { break }
+            }
+        }
+    }
+
+    private fun releaseAudio() {
+        val t = audioTrack ?: return
+        audioTrack = null
+        audioActive = false
+        audioQueue.clear()
+        try { t.stop() } catch (_: Exception) {}
+        try { t.release() } catch (_: Exception) {}
+    }
+
+    // endregion
 
     private fun releaseCodec() {
         val c = codec ?: return

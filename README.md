@@ -33,8 +33,9 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 |---|---|
 | `ShareScreen.dmg` | Mac (macOS 13 Ventura or newer, Apple Silicon or Intel) |
 | `ShareScreen.apk` | Android 7.0 or newer |
-| `ShareScreen.deb` | Ubuntu / Debian (X11 session) |
-| `ShareScreen.exe` | Windows 10 (1903+) / 11, 64-bit |
+| `ShareScreen-Setup.exe` | Windows 10 (1903+) / 11, 64-bit: installer |
+| `ShareScreen-Portable.exe` | Windows: single file, no install |
+| `ShareScreen.deb` | Ubuntu / Debian (X11 or Wayland) |
 
 ---
 
@@ -59,19 +60,23 @@ A new icon appears in your menu bar.
 
 ```bash
 sudo apt install ./ShareScreen.deb
-sharescreen              # extends your screen to the right
-sharescreen --portrait   # or --mirror, --width 2400 --height 1080, --encoder vaapi
 ```
 
-It needs an **X11 session**. On Ubuntu, log out, click the gear icon and pick **Ubuntu on Xorg**. Wayland isn't supported yet. Press Ctrl+C to stop; the extra monitor is removed when it exits. For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
+Open **ShareScreen** from your apps. A tray icon appears; the phone connects on its own.
+
+- **Xorg session:** ShareScreen adds an extra monitor to the right of your screen and removes it when you quit.
+- **Wayland session** (Ubuntu's default): your desktop asks once which screen to share. On GNOME 46+ (Ubuntu 24.04) and KDE Plasma 6 you can choose a **new virtual monitor**, so the phone becomes an extra screen; on older desktops you pick a screen to mirror.
+- If you don't see the tray icon on GNOME, install the AppIndicator extension (`sudo apt install gnome-shell-extension-appindicator`, then log out and in).
+
+From a terminal you can also run `sharescreen --portrait`, `--mirror`, `--quality sharp`, `--sound`, `--multi` or `--no-tray`; see `sharescreen --help`.
 
 ### 1c. Windows
 
-1. Run `ShareScreen.exe`. If SmartScreen warns, click **More info → Run anyway**. Allow it on **private networks** when Windows Firewall asks.
-2. With one monitor, the phone **mirrors** your screen. To use the phone as an **extra** screen, first install the free [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), set its resolution to your phone's (e.g. 2400×1080), and restart ShareScreen. It streams the extra monitor automatically.
-3. Options (run from a terminal): `ShareScreen.exe --list-monitors`, `--monitor 1`, `--encoder nvenc` (NVIDIA), `qsv` (Intel), `amf` (AMD), `--bitrate 20`.
+1. Run `ShareScreen-Setup.exe`. If SmartScreen warns, click **More info → Run anyway**. The installer adds a Start-menu shortcut, the Windows Firewall rule, and (optionally) starts ShareScreen when you sign in. Prefer no install? Use `ShareScreen-Portable.exe` and allow it on **private networks** when the firewall asks.
+2. A tray icon appears (click **^** next to the clock if it's hidden). The phone connects on its own.
+3. With one monitor, the phone **mirrors** your screen. To use it as an **extra** screen, install the free [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), set its resolution to your phone's (e.g. 2400×1080), and restart ShareScreen. It picks the extra monitor automatically; you can change it under **Monitor** in the tray menu.
 
-The exe bundles an unmodified [FFmpeg](https://ffmpeg.org) under GPL v3; see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Its source is attached to every release as `ffmpeg-source.tar.gz`. For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
+ShareScreen uses your graphics card (NVIDIA, Intel or AMD) for encoding when it can, and falls back to the CPU. The app bundles an unmodified [FFmpeg](https://ffmpeg.org) under GPL v3; see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Its source is attached to every release as `ffmpeg-source.tar.gz`.
 
 ### 2. Android
 
@@ -113,7 +118,22 @@ Then open ShareScreen on the phone. It uses USB automatically when it's availabl
 
 ## Using it
 
-**Windows and Linux:** ShareScreen runs in a terminal window; see the options in the install steps above. Press Ctrl+C to stop. On Windows, arrange the extra monitor in **Settings → System → Display**; on Ubuntu, in **Settings → Displays**.
+**Windows and Linux:** use the ShareScreen tray icon:
+
+| Menu | What it does |
+|---|---|
+| **Extra display on** | Turns streaming on or off. |
+| **Play sound on phone** | Plays the computer's sound on the phone (it keeps playing on the computer too). |
+| **Stream quality** | **Fast** for Wi‑Fi, **Balanced**, **Sharp** for USB. |
+| **Monitor** (Windows) | Which monitor the phone shows. |
+| **Show QR code…** | Opens the screen in any phone browser, with no app needed. |
+| **Start at login** | Starts ShareScreen when you sign in. |
+
+On Windows, arrange the extra monitor in **Settings → System → Display**; on Ubuntu, in **Settings → Displays**.
+
+**Several phones:** run `sharescreen --multi` (Linux) or install more virtual monitors with the Virtual Display Driver (Windows); each phone that connects gets its own monitor.
+
+**On the phone:** tap the screen to show live stats (resolution, frame rate, bitrate, decode time, dropped frames). Tap again to hide them.
 
 **Mac:** click the ShareScreen icon in the menu bar:
 
@@ -123,6 +143,7 @@ Then open ShareScreen on the phone. It uses USB automatically when it's availabl
 | **Show QR Code…** | Opens the screen in any phone browser, with no app needed (simpler, lower frame rate). |
 | **Display Size** | Phone‑shaped (landscape or portrait) or 16:9. **Sharp text (HiDPI)** makes text crisper but uses more bandwidth. |
 | **Stream Quality** | **Fast** for Wi‑Fi, **Sharp** for USB. |
+| **Play Sound on Phone** | Plays the Mac's sound on the phone too. |
 
 Arrange the new display next to your Mac's screen in **System Settings → Displays → Arrange…**
 

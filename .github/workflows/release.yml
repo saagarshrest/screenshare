@@ -53,7 +53,29 @@ jobs:
           case "$VERSION" in v[0-9]*) ;; *) VERSION=0.0.0 ;; esac
           VERSION="$VERSION" bash linux/build-deb.sh
           dpkg-deb --info linux/ShareScreen.deb
-          python3 -m py_compile host/sharescreen.py
+          python3 -m py_compile host/sharescreen.py host/tray.py
+          # Every dependency and recommendation must exist in Ubuntu's archive.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends --dry-run ./linux/ShareScreen.deb >/dev/null
+          for p in python3-pystray python3-pil python3-qrcode python3-gi gir1.2-ayatanaappindicator3-0.1 \
+                   gstreamer1.0-tools gstreamer1.0-pipewire gstreamer1.0-plugins-ugly pulseaudio-utils; do
+            apt-cache show "$p" >/dev/null || { echo "missing in archive: $p"; exit 1; }
+          done
+      - name: Smoke test the installed package (test source)
+        run: |
+          sudo apt-get install -y ./linux/ShareScreen.deb >/dev/null
+          sharescreen --source test --width 640 --height 360 --no-tray &
+          sleep 4
+          python3 - <<'PY'
+          import socket, struct, urllib.request
+          assert urllib.request.urlopen("http://127.0.0.1:8780/ping").read() == b"macscreen h264:8783"
+          f = socket.create_connection(("127.0.0.1", 8783), timeout=20).makefile("rb")
+          seen = set()
+          while not {1, 2} <= seen:
+              k, n = struct.unpack(">BI", f.read(5)); f.read(n); seen.add(k)
+          print("ok, got config + keyframe")
+          PY
+          kill %1 || true
       - uses: actions/upload-artifact@v7
         with: { name: linux, path: linux/ShareScreen.deb }
 
@@ -72,33 +94,52 @@ jobs:
           ./windows/ffmpeg.exe -version | head -1 | grep -q 'n8.1.3-34-ga35157abb9'
           curl -sSfL -o ffmpeg-source.tar.gz https://github.com/FFmpeg/FFmpeg/archive/a35157abb96167fd7308edc92b55408d5bb084b0.tar.gz
           ./windows/ffmpeg.exe -hide_banner -filters | grep -q ddagrab
-      - name: Build ShareScreen.exe
+      - name: Build the app (windowed, with tray)
         run: |
-          pip install pyinstaller==6.11.1
-          pyinstaller --onefile --console --name ShareScreen \
-            --add-binary "windows/ffmpeg.exe;." --add-data "THIRD_PARTY_NOTICES.txt;." \
-            --add-data "LICENSES/GPL-3.0.txt;LICENSES" host/sharescreen.py
-          cp dist/ShareScreen.exe ShareScreen.exe
+          pip install -r host/requirements-windows.txt
+          common=(--windowed --name ShareScreen --icon windows/ShareScreen.ico
+                  --paths host --hidden-import tray --hidden-import pystray._win32
+                  --add-binary "windows/ffmpeg.exe;." --add-data "THIRD_PARTY_NOTICES.txt;."
+                  --add-data "LICENSES/GPL-3.0.txt;LICENSES" --add-data "host/icon.png;.")
+          # Folder build for the installer (starts fast), single file for the portable exe.
+          pyinstaller --noconfirm --onedir "${common[@]}" host/sharescreen.py
+          pyinstaller --noconfirm --onefile --distpath dist-portable "${common[@]}" host/sharescreen.py
+          cp dist-portable/ShareScreen.exe ShareScreen-Portable.exe
+      - name: Build the installer
+        run: |
+          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          case "$VERSION" in v[0-9]*) VERSION="${VERSION#v}" ;; *) VERSION=0.0.0 ;; esac
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          [ -f "$ISCC" ] || { choco install innosetup -y --no-progress >/dev/null; }
+          "$ISCC" //Q "//DAppVersion=$VERSION" "//DSourceDir=..\dist\ShareScreen" windows/ShareScreen.iss
+          ls -la ShareScreen-Setup.exe
       - name: Smoke test (test source, real protocol)
         run: |
-          ./ShareScreen.exe --source test --width 640 --height 360 &
-          ./ShareScreen.exe --version | grep -q "GNU General Public License"
-          sleep 5
+          LOG="$LOCALAPPDATA/ShareScreen/sharescreen.log"
+          ./dist/ShareScreen/ShareScreen.exe --version; sleep 2
+          grep -q "GNU General Public License" "$LOG"
+          ./ShareScreen-Portable.exe --source test --width 640 --height 360 --no-tray &
+          sleep 8
           python - <<'PY'
           import socket, struct, urllib.request
           assert urllib.request.urlopen("http://127.0.0.1:8780/ping").read() == b"macscreen h264:8783"
-          f = socket.create_connection(("127.0.0.1", 8783), timeout=15).makefile("rb")
+          assert b"WebSocket" in urllib.request.urlopen("http://127.0.0.1:8780/").read()
+          f = socket.create_connection(("127.0.0.1", 8783), timeout=20).makefile("rb")
           seen = set()
           while not {1, 2} <= seen:
               k, n = struct.unpack(">BI", f.read(5)); f.read(n); seen.add(k)
           print("ok, got config + keyframe")
           PY
-          taskkill //F //IM ShareScreen.exe || true
+          taskkill //F //IM ShareScreen-Portable.exe || true
+          cat "$LOG" || true
+      - name: Encoder probe runs
+        run: PATH="$PWD/windows:$PATH" python -c "import sys; sys.path.insert(0, 'host'); import sharescreen as s; print(s.pick_encoder())"
       - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: |
-            ShareScreen.exe
+            ShareScreen-Setup.exe
+            ShareScreen-Portable.exe
             ffmpeg-source.tar.gz
             THIRD_PARTY_NOTICES.txt
 

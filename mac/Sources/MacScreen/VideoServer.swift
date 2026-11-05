@@ -7,6 +7,7 @@ import Network
 ///   type 1 = config  (payload: width u32, height u32, SPS+PPS Annex-B)
 ///   type 2 = keyframe, type 3 = frame (Annex-B H.264)
 ///   type 4 = status text (UTF-8)
+///   type 5 = audio (PCM s16le, 48 kHz, stereo)
 /// If a viewer can't keep up, we drop frames until the next keyframe instead of
 /// letting a backlog (= lag) build up.
 final class VideoServer {
@@ -87,6 +88,15 @@ final class VideoServer {
                 self.write(type: isKey ? 2 : 3, frame, to: viewer)
             }
             if needKey { self.onNeedKeyframe?() }
+        }
+    }
+
+    /// Sound goes only to phones that are already showing video and keeping up.
+    func send(audio pcm: Data) {
+        queue.async {
+            for viewer in self.viewers.values where !viewer.waitingForKeyframe && viewer.pendingBytes < self.maxBacklog {
+                self.write(type: 5, pcm, to: viewer)
+            }
         }
     }
 

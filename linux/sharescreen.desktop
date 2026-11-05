@@ -4,5 +4,5 @@ Name=ShareScreen
 Comment=Use your Android phone as an extra display
 Exec=sharescreen
 Icon=sharescreen
-Terminal=true
+Terminal=false
 Categories=Utility;

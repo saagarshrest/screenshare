@@ -59,6 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         get { defaults.object(forKey: "hidpi") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "hidpi") }
     }
+    private var playSound: Bool {
+        get { defaults.object(forKey: "sound") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "sound") }
+    }
     private var autoStart: Bool {
         get { defaults.object(forKey: "autostart") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "autostart") }
@@ -79,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if self.server.hasViewers, let jpeg = self.capturer.jpeg(from: buffer, quality: self.jpegQuality) {
                 self.server.broadcast(frame: jpeg)
             }
+        }
+        capturer.onAudio = { [weak self] pcm in
+            guard let self, self.video.hasViewers else { return }
+            self.video.send(audio: pcm)
         }
         capturer.onStop = { [weak self] _ in DispatchQueue.main.async { self?.stop() } }
         server.onViewerCountChanged = { [weak self] in self?.webViewers = $0; self?.viewersChanged() }
@@ -135,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { [weak self] in
             guard let self else { return }
             do {
+                self.capturer.captureAudio = self.playSound
                 try await self.capturer.start(displayID: display.displayID, outputWidth: w, outputHeight: h)
             } catch {
                 await MainActor.run {
@@ -259,6 +268,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         qualityItem.submenu = qualityMenu
         menu.addItem(qualityItem)
 
+        let sound = item("Play Sound on Phone", #selector(toggleSound))
+        sound.state = playSound ? .on : .off
+        menu.addItem(sound)
+
         let auto = item("Turn On When Phone Connects", #selector(toggleAutoStart))
         auto.state = autoStart ? .on : .off
         menu.addItem(auto)
@@ -279,6 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func pickQuality(_ sender: NSMenuItem) { qualityIndex = sender.tag; restartIfRunning() }
     @objc private func toggleHiDPI() { hiDPI.toggle(); restartIfRunning() }
     @objc private func toggleAutoStart() { autoStart.toggle() }
+    @objc private func toggleSound() { playSound.toggle(); restartIfRunning() }
     @objc private func quit() { stop(); NSApp.terminate(nil) }
 
     private func updateIcon() {
