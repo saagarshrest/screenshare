@@ -117,8 +117,9 @@ jobs:
       - name: Smoke test (test source, real protocol)
         run: |
           LOG="$LOCALAPPDATA/ShareScreen/sharescreen.log"
-          ./dist/ShareScreen/ShareScreen.exe --version; sleep 2
-          grep -q "GNU General Public License" "$LOG"
+          # From a shell the windowed exe inherits stdout; from Explorer it writes the log file.
+          { ./dist/ShareScreen/ShareScreen.exe --version 2>&1; sleep 2; cat "$LOG" 2>/dev/null; } \
+            | grep -q "GNU General Public License"
           ./ShareScreen-Portable.exe --source test --width 640 --height 360 --no-tray &
           sleep 8
           python - <<'PY'
