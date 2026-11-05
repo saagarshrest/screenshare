@@ -66,18 +66,23 @@ jobs:
         with: { python-version: "3.12" }
       - name: Fetch ffmpeg (GPL build with ddagrab, x264, NVENC, QSV, AMF)
         run: |
-          curl -sSL -o ffmpeg.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip
+          # Pinned so THIRD_PARTY_NOTICES.txt names the exact build and source.
+          curl -sSfL -o ffmpeg.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-05-12-48/ffmpeg-n8.1.3-34-ga35157abb9-win64-gpl-8.1.zip
           unzip -q -j ffmpeg.zip '*/bin/ffmpeg.exe' -d windows
+          ./windows/ffmpeg.exe -version | head -1 | grep -q 'n8.1.3-34-ga35157abb9'
+          curl -sSfL -o ffmpeg-source.tar.gz https://github.com/FFmpeg/FFmpeg/archive/a35157abb96167fd7308edc92b55408d5bb084b0.tar.gz
           ./windows/ffmpeg.exe -hide_banner -filters | grep -q ddagrab
       - name: Build ShareScreen.exe
         run: |
           pip install pyinstaller==6.11.1
           pyinstaller --onefile --console --name ShareScreen \
-            --add-binary "windows/ffmpeg.exe;." host/sharescreen.py
+            --add-binary "windows/ffmpeg.exe;." --add-data "THIRD_PARTY_NOTICES.txt;." \
+            --add-data "LICENSES/GPL-3.0.txt;LICENSES" host/sharescreen.py
           cp dist/ShareScreen.exe ShareScreen.exe
       - name: Smoke test (test source, real protocol)
         run: |
           ./ShareScreen.exe --source test --width 640 --height 360 &
+          ./ShareScreen.exe --version | grep -q "GNU General Public License"
           sleep 5
           python - <<'PY'
           import socket, struct, urllib.request
@@ -90,7 +95,12 @@ jobs:
           PY
           taskkill //F //IM ShareScreen.exe || true
       - uses: actions/upload-artifact@v4
-        with: { name: windows, path: ShareScreen.exe }
+        with:
+          name: windows
+          path: |
+            ShareScreen.exe
+            ffmpeg-source.tar.gz
+            THIRD_PARTY_NOTICES.txt
 
   release:
     needs: [mac, android, linux, windows]

@@ -31,6 +31,7 @@ HTTP_PORT = 8780
 DISCOVERY_PORT = 8782
 VIDEO_PORT = 8783
 MONITOR_NAME = "ShareScreen"
+VERSION = "1.0.0"
 IS_WINDOWS = sys.platform == "win32"
 MAX_BACKLOG = 600_000  # bytes queued per viewer before we skip to the next keyframe
 
@@ -482,6 +483,8 @@ def local_ips():
 # ---------------------------------------------------------------- main
 
 def main():
+    if IS_WINDOWS and getattr(sys, "frozen", False):
+        log("includes FFmpeg (GPL v3). Run with --version for license and source details.")
     p = argparse.ArgumentParser(description="Use an Android phone as an extra display.")
     p.add_argument("--width", type=int, default=2400, help="virtual display width (default 2400)")
     p.add_argument("--height", type=int, default=1080, help="virtual display height (default 1080)")
@@ -496,8 +499,15 @@ def main():
                    help="Windows: which monitor to stream (see --list-monitors). "
                         "Default: the last non-primary one, else the main screen")
     p.add_argument("--list-monitors", action="store_true", help="Windows: list monitors and exit")
+    p.add_argument("--version", action="store_true", help="show version and license notices")
     p.add_argument("--source", choices=["screen", "test"], default="screen", help=argparse.SUPPRESS)
     args = p.parse_args()
+    if args.version:
+        print(f"ShareScreen {VERSION} (MIT) - https://github.com/saagarshrest/screenshare")
+        notice = os.path.join(getattr(sys, "_MEIPASS", ""), "THIRD_PARTY_NOTICES.txt")
+        if os.path.exists(notice):
+            print(open(notice, encoding="utf-8").read())
+        return
     if args.portrait:
         args.width, args.height = args.height, args.width
     args.width -= args.width % 2

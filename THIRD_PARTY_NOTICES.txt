@@ -1,0 +1,27 @@
+ShareScreen - third-party notices
+=================================
+
+ShareScreen's own code is MIT-licensed (see LICENSE).
+
+ShareScreen.exe (Windows) includes a separate, unmodified copy of FFmpeg,
+which ShareScreen runs as its own program (ffmpeg.exe). That copy is licensed
+under the GNU General Public License, version 3 (see LICENSES/GPL-3.0.txt),
+because it is built with GPL components such as x264.
+
+  FFmpeg version : n8.1.3-34-ga35157abb9
+  FFmpeg source  : https://github.com/FFmpeg/FFmpeg/tree/a35157abb96167fd7308edc92b55408d5bb084b0
+                   (also attached to each ShareScreen release as ffmpeg-source.tar.gz)
+  Binary build   : BtbN/FFmpeg-Builds, release autobuild-2026-11-05-12-48,
+                   file ffmpeg-n8.1.3-34-ga35157abb9-win64-gpl-8.1.zip
+  Build scripts  : https://github.com/BtbN/FFmpeg-Builds/tree/c63bb308a1de656b425c132a8102f8fd5389afc5
+                   (these list the exact versions of every bundled library)
+
+FFmpeg is a trademark of Fabrice Bellard. https://ffmpeg.org
+
+Written offer: for at least three years after we last distribute a given
+ShareScreen.exe, anyone may get the complete corresponding source code of the
+FFmpeg copy in it, at no charge, by opening an issue at
+https://github.com/saagarshrest/screenshare/issues.
+
+The macOS app, the Android app and the Linux .deb contain no third-party code.
+The Linux .deb uses the ffmpeg already installed on your system.

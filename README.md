@@ -69,7 +69,7 @@ It needs an **X11 session**. On Ubuntu, log out, click the gear icon and pick **
 2. With one monitor, the phone **mirrors** your screen. To use the phone as an **extra** screen, first install the free [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), set its resolution to your phone's (e.g. 2400×1080), and restart ShareScreen. It streams the extra monitor automatically.
 3. Options (run from a terminal): `ShareScreen.exe --list-monitors`, `--monitor 1`, `--encoder nvenc` (NVIDIA), `qsv` (Intel), `amf` (AMD), `--bitrate 20`.
 
-The exe bundles [FFmpeg](https://ffmpeg.org) (GPL build from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)). For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
+The exe bundles an unmodified [FFmpeg](https://ffmpeg.org) under GPL v3; see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Its source is attached to every release as `ffmpeg-source.tar.gz`. For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
 
 ### 2. Android
 
