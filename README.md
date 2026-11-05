@@ -228,7 +228,6 @@ monitor ─▶ ffmpeg (ddagrab / x11grab) ─▶ x264 or GPU H.264 ────t
 
 - [x] Windows host (`.exe`)
 - [x] Linux host (`.deb` for Ubuntu, X11)
-- [ ] Touch input from the phone
 
 ## License
 
