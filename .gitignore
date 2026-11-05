@@ -11,3 +11,8 @@ android/.kotlin/
 .DS_Store
 __pycache__/
 *.pyc
+
+# iOS build output
+ios/build/
+*.xcuserstate
+xcuserdata/

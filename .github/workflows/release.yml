@@ -65,7 +65,8 @@ jobs:
       - name: Smoke test the installed package (test source)
         run: |
           sudo apt-get install -y ./linux/ShareScreen.deb >/dev/null
-          sharescreen --source test --width 640 --height 360 --no-tray &
+          sharescreen --source test --width 640 --height 360 --no-tray > host.log 2>&1 &
+          HOST_PID=$!
           sleep 4
           python3 - <<'PY'
           import socket, struct, urllib.request
@@ -76,7 +77,8 @@ jobs:
               k, n = struct.unpack(">BI", f.read(5)); f.read(n); seen.add(k)
           print("ok, got config + keyframe")
           PY
-          kill %1 || true
+          kill $HOST_PID || true
+          cat host.log
       - uses: actions/upload-artifact@v7
         with: { name: linux, path: linux/ShareScreen.deb }
 
@@ -117,9 +119,13 @@ jobs:
       - name: Smoke test (test source, real protocol)
         run: |
           LOG="$LOCALAPPDATA/ShareScreen/sharescreen.log"
-          # From a shell the windowed exe inherits stdout; from Explorer it writes the log file.
-          { ./dist/ShareScreen/ShareScreen.exe --version 2>&1; sleep 2; cat "$LOG" 2>/dev/null; } \
-            | grep "GNU General Public License" >/dev/null
+          # From a shell the windowed exe may inherit stdout; from Explorer it writes the log file.
+          ./dist/ShareScreen/ShareScreen.exe --version > ver.txt 2>&1 || echo "exit code $?"
+          sleep 3
+          echo "--- stdout:"; cat ver.txt || true
+          echo "--- log:"; cat "$LOG" 2>/dev/null || echo "(no log)"
+          grep -h "GNU General Public License" ver.txt "$LOG" >/dev/null 2>&1 \
+            || { echo "::error::--version did not print the license notice"; exit 1; }
           ./ShareScreen-Portable.exe --source test --width 640 --height 360 --no-tray &
           sleep 8
           python - <<'PY'
@@ -145,8 +151,18 @@ jobs:
             ffmpeg-source.tar.gz
             THIRD_PARTY_NOTICES.txt
 
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the iOS app (simulator, unsigned; compile check)
+        working-directory: ios
+        run: |
+          xcodebuild -project ShareScreen.xcodeproj -scheme ShareScreen -sdk iphonesimulator \
+            -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -5
+
   release:
-    needs: [mac, android, linux, windows]
+    needs: [mac, android, linux, windows, ios]
     if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
