@@ -42,8 +42,23 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: android, path: ShareScreen.apk }
 
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build .deb
+        env:
+          VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          case "$VERSION" in v[0-9]*) ;; *) VERSION=0.0.0 ;; esac
+          VERSION="$VERSION" bash linux/build-deb.sh
+          dpkg-deb --info linux/ShareScreen.deb
+          python3 -m py_compile linux/sharescreen.py
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: linux/ShareScreen.deb }
+
   release:
-    needs: [mac, android]
+    needs: [mac, android, linux]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:

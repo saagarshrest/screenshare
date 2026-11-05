@@ -25,6 +25,7 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 |---|---|
 | `ShareScreen.dmg` | Mac (macOS 13 Ventura or newer, Apple Silicon or Intel) |
 | `ShareScreen.apk` | Android 7.0 or newer |
+| `ShareScreen.deb` | Ubuntu / Debian (X11 session) |
 
 ---
 
@@ -43,6 +44,16 @@ Grab the latest files from **[Releases](../../releases/latest)**:
 4. Allow **Local Network** access if macOS asks.
 
 A new icon appears in your menu bar.
+
+### 1b. Ubuntu / Debian (instead of a Mac)
+
+```bash
+sudo apt install ./ShareScreen.deb
+sharescreen              # extends your screen to the right
+sharescreen --portrait   # or --mirror, --width 2400 --height 1080, --encoder vaapi
+```
+
+It needs an **X11 session**. On Ubuntu, log out, click the gear icon and pick **Ubuntu on Xorg**. Wayland isn't supported yet. Press Ctrl+C to stop; the extra monitor is removed when it exits. For USB, run `adb reverse tcp:8780 tcp:8780 && adb reverse tcp:8783 tcp:8783`.
 
 ### 2. Android
 
@@ -192,7 +203,7 @@ HTTP :8780 / WebSocket :8781 (JPEG) ──────────────�
 ## Roadmap
 
 - [ ] Windows host (`.exe`)
-- [ ] Linux host (`.deb` for Ubuntu)
+- [x] Linux host (`.deb` for Ubuntu, X11)
 - [ ] Touch input from the phone
 
 ## License

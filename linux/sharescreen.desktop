@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ShareScreen
+Comment=Use your Android phone as an extra display
+Exec=sharescreen
+Icon=sharescreen
+Terminal=true
+Categories=Utility;
