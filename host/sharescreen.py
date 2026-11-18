@@ -92,7 +92,8 @@ def fit(w, h, longest):
 # ---------------------------------------------------------------- monitors
 
 def windows_monitors():
-    """[(index, x, y, width, height, is_primary)] in Desktop Duplication order."""
+    """[(index, x, y, width, height, is_primary)] in EnumDisplayMonitors order.
+    Also records which ones are virtual (a display driver with no real screen)."""
     import ctypes
     from ctypes import wintypes
     user32 = ctypes.windll.user32
@@ -101,24 +102,47 @@ def windows_monitors():
     except (AttributeError, OSError):
         user32.SetProcessDPIAware()
 
-    class MONITORINFO(ctypes.Structure):
+    class MONITORINFOEX(ctypes.Structure):
         _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
-                    ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+                    ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD),
+                    ("szDevice", wintypes.WCHAR * 32)]
+
+    class DISPLAY_DEVICE(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("DeviceName", wintypes.WCHAR * 32),
+                    ("DeviceString", wintypes.WCHAR * 128), ("StateFlags", wintypes.DWORD),
+                    ("DeviceID", wintypes.WCHAR * 128), ("DeviceKey", wintypes.WCHAR * 128)]
+
+    adapters = {}  # \.\DISPLAY1 -> "NVIDIA GeForce ..." / "Virtual Display Driver"
+    n = 0
+    while True:
+        d = DISPLAY_DEVICE()
+        d.cb = ctypes.sizeof(d)
+        if not user32.EnumDisplayDevicesW(None, n, ctypes.byref(d), 0):
+            break
+        adapters[d.DeviceName] = d.DeviceString
+        n += 1
 
     found = []
+    _monitor_virtual.clear()
     proc = ctypes.WINFUNCTYPE(ctypes.c_int, wintypes.HMONITOR, wintypes.HDC,
                               ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
 
     def callback(handle, _dc, _rect, _data):
-        info = MONITORINFO()
-        info.cbSize = ctypes.sizeof(MONITORINFO)
+        info = MONITORINFOEX()
+        info.cbSize = ctypes.sizeof(MONITORINFOEX)
         user32.GetMonitorInfoW(handle, ctypes.byref(info))
         r = info.rcMonitor
+        name = adapters.get(info.szDevice, "").lower()
+        _monitor_virtual[len(found)] = any(k in name for k in VIRTUAL_DISPLAY_HINTS)
         found.append((len(found), r.left, r.top, r.right - r.left, r.bottom - r.top, bool(info.dwFlags & 1)))
         return 1
 
     user32.EnumDisplayMonitors(None, None, proc(callback), 0)
     return found
+
+
+VIRTUAL_DISPLAY_HINTS = ("virtual", "idd", "parsec", "spacedesk", "usbmmidd", "amyuni")
+_monitor_virtual = {}
 
 
 def reuse_port(sock):
@@ -130,25 +154,31 @@ def reuse_port(sock):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 
-_ddagrab_ok = {}
+_ddagrab_sizes = None
 
 
-def ddagrab_works(index, w, h):
-    """True if ddagrab output `index` exists and is this w x h monitor. Desktop
-    Duplication numbers outputs per GPU, so on multi-GPU PCs a screen can be
-    missing or land on a different index than EnumDisplayMonitors reports."""
-    key = (index, w, h)
-    if key not in _ddagrab_ok:
-        try:
-            r = subprocess.run([ffmpeg_path(), "-hide_banner", "-f", "lavfi", "-i",
-                                f"ddagrab=output_idx={index}:framerate=5", "-frames:v", "1", "-f", "null", "-"],
-                               capture_output=True, text=True, timeout=10,
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+def ddagrab_output(monitor, monitors):
+    """The ddagrab output_idx showing this monitor, or None. Desktop Duplication
+    numbers screens its own way (per GPU, and it can't see screens on a second
+    GPU), so match by size, in order among same-sized monitors."""
+    global _ddagrab_sizes
+    if _ddagrab_sizes is None:
+        _ddagrab_sizes = []
+        for i in range(len(monitors) + 1):
+            try:
+                r = subprocess.run([ffmpeg_path(), "-hide_banner", "-f", "lavfi", "-i",
+                                    f"ddagrab=output_idx={i}:framerate=5", "-frames:v", "1", "-f", "null", "-"],
+                                   capture_output=True, text=True, timeout=10, creationflags=NO_WINDOW)
+            except (OSError, subprocess.SubprocessError):
+                break
             m = re.search(r"Video: .*?(\d{2,5})x(\d{2,5})", r.stderr)
-            _ddagrab_ok[key] = bool(m) and (int(m.group(1)) & ~1, int(m.group(2)) & ~1) == (w, h)
-        except (OSError, subprocess.SubprocessError):
-            _ddagrab_ok[key] = False
-    return _ddagrab_ok[key]
+            if not m:
+                break
+            _ddagrab_sizes.append((int(m.group(1)) & ~1, int(m.group(2)) & ~1))
+    size = lambda m: (m[3] & ~1, m[4] & ~1)
+    rank = [m[0] for m in monitors if size(m) == size(monitor)].index(monitor[0])
+    outputs = [i for i, s in enumerate(_ddagrab_sizes) if s == size(monitor)]
+    return outputs[rank] if rank < len(outputs) else None
 
 
 def modeline(w, h, fps):
@@ -1064,7 +1094,9 @@ class Host:
             if a.monitor is not None:
                 pick = [m for m in monitors if m[0] == a.monitor] or monitors[:1]
             else:
-                extra = [m for m in monitors if not m[5]]
+                # Virtual monitors first: a real second screen already has a picture.
+                extra = sorted((m for m in monitors if not m[5]),
+                               key=lambda m: not _monitor_virtual.get(m[0], False))
                 pick = (extra[index:index + 1] or ([] if index else monitors[:1]))
                 if not extra and index == 0:
                     log("only one monitor found, so the phone mirrors your main screen.")
@@ -1073,8 +1105,9 @@ class Host:
                 return None, None
             i, x, y, w, h, _ = pick[0]
             w, h = w & ~1, h & ~1
-            if ddagrab_works(i, w, h):
-                return ["-f", "lavfi", "-i", f"ddagrab=output_idx={i}:framerate={a.fps}:draw_mouse=1,"
+            out = ddagrab_output(pick[0], monitors)
+            if out is not None:
+                return ["-f", "lavfi", "-i", f"ddagrab=output_idx={out}:framerate={a.fps}:draw_mouse=1,"
                         f"hwdownload,format=bgra,crop={w}:{h}:0:0"], (w, h)
             # Desktop Duplication can't reach this screen (e.g. it's on a second GPU
             # in an Intel + NVIDIA PC), so capture its desktop rectangle through GDI.
