@@ -5,11 +5,10 @@
 # ShareScreen
 
 <p>
-  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/saagarshrest/screenshare?style=flat-square&color=5B8DEF"></a>
-  <a href="../../actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/saagarshrest/screenshare/ci.yml?branch=main&style=flat-square&label=build"></a>
-  <a href="../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/saagarshrest/screenshare/total?style=flat-square&color=8A5CF6"></a>
+  <a href="../../releases/latest"><img alt="Download the latest release" src="https://img.shields.io/badge/download-latest%20release-5B8DEF?style=flat-square"></a>
+  <a href="../../actions/workflows/ci.yml"><img alt="Build" src="../../actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-2b3557?style=flat-square">
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/saagarshrest/screenshare?style=flat-square&color=3DD68C"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-3DD68C?style=flat-square"></a>
 </p>
 
 Use your **Android phone (or iPhone/iPad) as an extra display for your Mac, Windows PC or Linux computer**. Drag windows onto it like a real monitor.
