@@ -121,6 +121,36 @@ def windows_monitors():
     return found
 
 
+def reuse_port(sock):
+    """Quick restarts on macOS/Linux. On Windows SO_REUSEADDR would let a second
+    copy silently share the ports with the first, so ask for exclusive use."""
+    if IS_WINDOWS:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    else:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+
+_ddagrab_ok = {}
+
+
+def ddagrab_works(index, w, h):
+    """True if ddagrab output `index` exists and is this w x h monitor. Desktop
+    Duplication numbers outputs per GPU, so on multi-GPU PCs a screen can be
+    missing or land on a different index than EnumDisplayMonitors reports."""
+    key = (index, w, h)
+    if key not in _ddagrab_ok:
+        try:
+            r = subprocess.run([ffmpeg_path(), "-hide_banner", "-f", "lavfi", "-i",
+                                f"ddagrab=output_idx={index}:framerate=5", "-frames:v", "1", "-f", "null", "-"],
+                               capture_output=True, text=True, timeout=10,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            m = re.search(r"Video: .*?(\d{2,5})x(\d{2,5})", r.stderr)
+            _ddagrab_ok[key] = bool(m) and (int(m.group(1)) & ~1, int(m.group(2)) & ~1) == (w, h)
+        except (OSError, subprocess.SubprocessError):
+            _ddagrab_ok[key] = False
+    return _ddagrab_ok[key]
+
+
 def modeline(w, h, fps):
     """Reduced-blanking style modeline; exact timings don't matter for a virtual output."""
     htotal, vtotal = w + 160, h + 35
@@ -377,7 +407,7 @@ class VideoServer:
 
     def start(self):
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        reuse_port(srv)
         srv.bind(("0.0.0.0", VIDEO_PORT))
         srv.listen(8)
         self.sock = srv
@@ -763,7 +793,7 @@ class WebSocketServer:
 
     def start(self):
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        reuse_port(srv)
         srv.bind(("0.0.0.0", WS_PORT))
         srv.listen(8)
         threading.Thread(target=self._accept, args=(srv,), daemon=True).start()
@@ -879,7 +909,7 @@ class HttpHandler(http.server.BaseHTTPRequestHandler):
 
 
 def start_http():
-    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    socketserver.ThreadingTCPServer.allow_reuse_address = not IS_WINDOWS  # see reuse_port()
     httpd = socketserver.ThreadingTCPServer(("0.0.0.0", HTTP_PORT), HttpHandler)
     httpd.daemon_threads = True
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -1041,10 +1071,17 @@ class Host:
                     log("to extend instead, install the Virtual Display Driver (see the README) and restart.")
             if not pick:
                 return None, None
-            i, _, _, w, h, _ = pick[0]
+            i, x, y, w, h, _ = pick[0]
             w, h = w & ~1, h & ~1
-            return ["-f", "lavfi", "-i", f"ddagrab=output_idx={i}:framerate={a.fps}:draw_mouse=1,"
-                    f"hwdownload,format=bgra,crop={w}:{h}:0:0"], (w, h)
+            if ddagrab_works(i, w, h):
+                return ["-f", "lavfi", "-i", f"ddagrab=output_idx={i}:framerate={a.fps}:draw_mouse=1,"
+                        f"hwdownload,format=bgra,crop={w}:{h}:0:0"], (w, h)
+            # Desktop Duplication can't reach this screen (e.g. it's on a second GPU
+            # in an Intel + NVIDIA PC), so capture its desktop rectangle through GDI.
+            log(f"monitor {i} isn't reachable by Desktop Duplication; using GDI capture.")
+            return ["-f", "gdigrab", "-framerate", str(min(a.fps, 30)), "-draw_mouse", "1",
+                    "-offset_x", str(x), "-offset_y", str(y), "-video_size", f"{w}x{h}",
+                    "-i", "desktop"], (w, h)
         if is_wayland():
             return self._wayland_source(index)
         display = os.environ.get("DISPLAY", ":0")
